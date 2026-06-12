@@ -129,6 +129,11 @@ def propagate(p_in, H):
 
     return p_out
 
+def transmission_coefficient(Zt,Zh,Zm,kh,T):
+    denom1 = Zh*(Zt+Zm)*np.cos(kh*T)
+    denom2 = (Zh*Zh+Zt*Zm)*np.sin(kh*T)
+    return 4*Zt*Zh*Zh*Zm / (denom1*denom1 + denom2*denom2)
+
 def loss_func_iasa(target_pressure,current_pressure):
 
     current_intensity = tf.abs(current_pressure*tf.math.conj(current_pressure))
@@ -141,7 +146,7 @@ def loss_func_iasa(target_pressure,current_pressure):
 
 
 # p_0_amp: pressure amplitude (Pa) at z=0 (transducer). should be a tensor
-def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureImage=False):
+def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureImage=False,H=0,kh=0,Zt=0,Zh=0,Zm=0):
 
     # initialize phase at z=0
     N = p_0_amp.shape[0]
@@ -155,7 +160,15 @@ def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureIm
     for step_num in range(600):
         # propagate to image plane
         p_0 = p_0_amp*np.exp(1j*phase_0)
-        p_z = propagate(p_0, H_up)
+
+        # get alpha_T
+        alpha_T = np.ones(p_0.shape)
+        if H != 0:
+            delta_z = (phase_0 % (2*np.pi)) / (2*np.pi) * H
+            T = H-delta_z
+            alpha_T = transmission_coefficient(Zt,Zh,Zm,kh,T)
+
+        p_z = np.sqrt(alpha_T)*propagate(p_0, H_up)
 
         # record loss function
         #loss_record.append(loss_func_iasa(p_z,p_target_amp))
@@ -184,13 +197,12 @@ def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureIm
     return phase_0
 
 
-def diffPAT(p_0_amp,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False):
+def diffPAT(p_0_amp,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False,H=0,kh=0,Zt=0,Zh=0,Zm=0):
     
     # initialize phase at z=0
     N = p_0_amp.shape[0]
     phase_0 = np.zeros((N,N))
     phase_0_tf = tf.Variable(phase_0,dtype=tf.float64)
-    print(phase_0_tf)
     #phase_0_tf = tf.dtypes.cast(p_0_amp, tf.complex128)
 
     target_intensity = tf.abs(p_target_amp*tf.math.conj(p_target_amp))
@@ -199,10 +211,20 @@ def diffPAT(p_0_amp,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False
         # create pressure field at z=0 and propagate to image plane
         phase_exp = tf.dtypes.complex(tf.math.cos(phase_0_tf), tf.math.sin(phase_0_tf))
         p_0 = tf.math.multiply(p_0_amp, phase_exp)
-        p_z = propagate(p_0, H_up)
+
+        # get alpha_T
+        alpha_T = np.ones(p_0.shape)
+        if H != 0:
+            delta_z = (phase_0 % (2*np.pi)) / (2*np.pi) * H
+            T = H-delta_z
+            alpha_T = transmission_coefficient(Zt,Zh,Zm,kh,T)
+
+        p_z = np.sqrt(alpha_T)*propagate(p_0, H_up)
 
         # compare image plane intensity with target
         current_intensity = tf.abs(p_z * tf.math.conj(p_z))
+        # if you just add a term here like phase^2, it should reward staying near 0
+        #loss = tf.reduce_sum(tf.math.abs(current_intensity-target_intensity)+0.01*tf.math.multiply(phase_0_tf,phase_0_tf))
         loss = tf.reduce_sum(tf.math.abs(current_intensity-target_intensity))
         return loss
 

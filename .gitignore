@@ -1,0 +1,5 @@
+STLs/
+*.stl
+*.step
+*.zip
+__pycache__/

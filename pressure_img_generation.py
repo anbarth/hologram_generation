@@ -12,11 +12,14 @@ def increase_resolution(mat,N_new):
 
 # N: square grid side length (px)
 # R: circle radius (px)
-def circle_matrix(N,R):
+def circle_matrix(N,R,center=None):
+    if center==None:
+        center = (N/2,N/2)
+        
     mymat = np.zeros((N,N))
     for i in range(N):
         for j in range(N):
-            if (i-N/2)*(i-N/2) + (j-N/2)*(j-N/2) < R*R:
+            if (i-center[0])*(i-center[0]) + (j-center[1])*(j-center[1]) < R*R:
                 mymat[i,j]=1
 
     # convert to tensor with appropriate datatype
