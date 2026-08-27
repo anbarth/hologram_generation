@@ -203,7 +203,7 @@ def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureIm
 
     return phase_0
 
-# diffPAT algorithm 
+# diffPAT algorithm (https://doi.org/10.1038/s41598-021-91880-2)
 # p_0_amp: pressure amplitude (Pa) at z=0 (transducer). should be a tensorflow tensor
 # p_target: target pressure amplitude (Pa) in the image plane. should be a tensorflow tensor
 # H_up: propagator from z=0 to image plane
