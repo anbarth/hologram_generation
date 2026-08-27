@@ -5,6 +5,7 @@ import trimesh
 import tensorflow as tf
 from scipy.ndimage import gaussian_filter
 
+# draws a heatmap of real-valued pressure
 def draw_pressure_amplitude(img):
     fig, ax = plt.subplots()
     ax_img = ax.imshow(img,cmap='viridis')
@@ -12,11 +13,12 @@ def draw_pressure_amplitude(img):
     #ax_img.set_clim(0,2)
     #plt.xlim(100,400);plt.ylim(100,400)
 
+# draws a heatmap of the magnitude of complex-valued pressure
 def draw_pressure_complex(p):
     img=tf.sqrt(p*tf.math.conj(p)).numpy().real
     draw_pressure_amplitude(img)
     
-
+# draws a heatmap of phase
 def draw_phase(img):
     #img = (lambda x: x % (2*np.pi) )(img)
     fig, ax = plt.subplots()
@@ -25,7 +27,7 @@ def draw_phase(img):
     plt.colorbar(ax_img)
     #plt.xlim(100,400);plt.ylim(100,400)
 
-
+# simulate the effect of adding some noise to the phase map
 def add_noise_to_phase(phase,fraction_noise):
     # phase -- matrix phase map
     # fraction_noise -- amt of noise to add, as a fraction of 2pi
@@ -37,6 +39,8 @@ def add_noise_to_phase(phase,fraction_noise):
     #print(noise)
     return noisy_phase
 
+# simulate the effect of rounding off the phase to a given number of steps within 2pi
+# eg if N_intervals = 4, then it will round off to (0, pi/2, pi, 3pi/2)
 def round_off_phase(phase,N_intervals):
     # phase -- matrix phase map
     # N_intervals -- round off to N intervals within 2pi
@@ -45,8 +49,10 @@ def round_off_phase(phase,N_intervals):
     return np.round(phase_rescaled) * 2*np.pi / N_intervals
     
     
-
-
+# creates a Trimesh Mesh object from a given heightmap for a holographic lens
+# input_map: a matrix representing the topview shadow of the lens (ie the outline of the transducer). 1s where the lens should be, 0 elsewhere
+# x_values, y_values: realspace (x,y) values over the area covered by input_map
+# H, R: height and radius (in m) of a cylinder to wrap around the lens. if left 0, then no cylinder.
 def heightmap_to_mesh(heightmap,input_map,x_values,y_values,smooth=False,H=0,R=0,center=None):
     #H = np.max(heightmap)
     #steps = 25
