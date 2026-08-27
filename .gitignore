@@ -1,4 +1,5 @@
 STLs/
+STLs/*
 *.stl
 *.step
 *.zip

@@ -35,7 +35,7 @@ def band_limited_propagator(k, N, z, dx):
     return H
 
 
-# creates propagator H
+# creates propagator H in the hologram-to-image plane direction, including multiple reflections
 # k: wavenumber=2pi/lambda=2pi f/c in propagation medium (1/m)
 # N: square grid size length (px)
 # z1: propagation distance (m)
@@ -71,7 +71,14 @@ def band_limited_propagator_with_reflections_up(k, N, z1, dx, z2, R1, R2):
     H = np.where(k_transverse > k_cutoff, 0, H)
     return H
 
-
+# creates propagator H in the image-to-hologram plane direction, including multiple reflections
+# k: wavenumber=2pi/lambda=2pi f/c in propagation medium (1/m)
+# N: square grid size length (px)
+# z1: propagation distance (m)
+# dx: pixel size (m) 
+# z2: distance to top plate (m)
+# R1: reflection coefficient from medium to hologram
+# R2: reflection coefficient from medium to top plate
 def band_limited_propagator_with_reflections_down(k, N, z1, dx, z2, R1, R2):
     L = N*dx
 
@@ -99,20 +106,11 @@ def band_limited_propagator_with_reflections_down(k, N, z1, dx, z2, R1, R2):
     H = np.where(k_transverse > k_cutoff, 0, H)
     return H
 
-# p_in: input complex-valued pressure field
-def propagate_broken(p_in, H):
-    #N = p_in.shape[0]
-
-    p_in_hat = tf.signal.fft2d(p_in)
-    p_out= tf.signal.ifft2d(tf.math.multiply(p_in_hat, H))
-
-    return p_out
-
-
+# propagates a complex pressure field p_in according to the given propagator H
 def propagate(p_in, H):
     N = p_in.shape[0]
     p_in = tf.constant(p_in,dtype=tf.complex128)
-    # pad out the pressure matrix with 0s... for reasons.......
+    # pad out the pressure matrix with 0s to avoid edge effects
     p_in_padded = tf.pad(p_in, ((N//2,N//2), (N//2,N//2)), 'constant')
     N_padded = p_in_padded.shape[0]
 
@@ -120,7 +118,7 @@ def propagate(p_in, H):
     p_in_hat = tf.signal.fft2d(p_in_padded)
     p_out_padded = tf.signal.ifft2d(tf.math.multiply(p_in_hat, H))
 
-    # remove padding around matrix
+    # remove 0 padding
     N_padded = p_out_padded.shape[0]
     N = N_padded // 2
     start_num = N//2
@@ -129,23 +127,32 @@ def propagate(p_in, H):
 
     return p_out
 
+# transmission coefficient through a section of the holographic lens, accounting for the 
+# transducer-hologram surface and the hologram-medium surface
+# Zt, Zh, Zm: impedance values for transducer, hologram, and medium respectively
+# kh: wavenumber in hologram
+# T: thickness of hologram
 def transmission_coefficient(Zt,Zh,Zm,kh,T):
     denom1 = Zh*(Zt+Zm)*np.cos(kh*T)
     denom2 = (Zh*Zh+Zt*Zm)*np.sin(kh*T)
     return 4*Zt*Zh*Zh*Zm / (denom1*denom1 + denom2*denom2)
 
+# loss function for IASA
+# sum((I_target-I_current)^2)
 def loss_func_iasa(target_pressure,current_pressure):
-
     current_intensity = tf.abs(current_pressure*tf.math.conj(current_pressure))
     target_intensity = tf.abs(target_pressure*tf.math.conj(target_pressure))
-
     loss = tf.reduce_sum(pow(target_intensity-current_intensity,2))
-
     return loss
 
-
-
-# p_0_amp: pressure amplitude (Pa) at z=0 (transducer). should be a tensor
+# iterative angular spectrum approach (IASA)
+# p_0_amp: pressure amplitude (Pa) at z=0 (transducer). should be a tensorflow tensor
+# p_target: target pressure amplitude (Pa) in the image plane. should be a tensorflow tensor
+# H_up: propagator from z=0 to image plane
+# H_down: separate propagator from image plane to z=0. if left None, it will just use H_up*. if not None, that seems to break things.
+# H: total lens thickness. can be left as 0 to ignore the effect of attenuation in the lens. if nonzero, attenuation is included.
+# kh: wavenumber in hologram lens material
+# Zt, Zh, Zm: impedance values for transducer, hologram, and medium respectively
 def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureImage=False,H=0,kh=0,Zt=0,Zh=0,Zm=0):
 
     # initialize phase at z=0
@@ -196,7 +203,13 @@ def iasa(p_0_amp,p_target_amp,H_up,H_down=None,drawPhaseMap=False,drawPressureIm
 
     return phase_0
 
-
+# diffPAT algorithm 
+# p_0_amp: pressure amplitude (Pa) at z=0 (transducer). should be a tensorflow tensor
+# p_target: target pressure amplitude (Pa) in the image plane. should be a tensorflow tensor
+# H_up: propagator from z=0 to image plane
+# H: total lens thickness. can be left as 0 to ignore the effect of attenuation in the lens. if nonzero, attenuation is included.
+# kh: wavenumber in hologram lens material
+# Zt, Zh, Zm: impedance values for transducer, hologram, and medium respectively
 def diffPAT(p_0_amp,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False,H=0,kh=0,Zt=0,Zh=0,Zm=0):
     
     # initialize phase at z=0
@@ -247,7 +260,7 @@ def diffPAT(p_0_amp,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False
     
     return phase_0_tf.numpy()
 
-
+# i did not finish this but the idea was to implement diffPAT over an array of transducers (rather than the pixels of a holographic lens)
 def diffPAT_array(transducer_array,p_target_amp,H_up,drawPhaseMap=False,drawPressureImage=False):
     
     # initialize phase at z=0
